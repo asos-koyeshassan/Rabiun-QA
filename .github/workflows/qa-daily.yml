@@ -1,0 +1,109 @@
+name: Rabiun daily QA
+
+on:
+  schedule:
+    # 07:00 Europe/London. GitHub Actions cron is UTC — 06:00 UTC covers both
+    # GMT and BST without needing to change this twice a year (worst case
+    # you're ~1hr off around the clock-change weeks, harmless for a QA run).
+    - cron: '0 6 * * *'
+  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write # needed to commit updated data/*.csv and dashboard/ back to the repo
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Functional + pixel tests. Continue on failure so the dashboard still
+      # gets built and published — the job as a whole still fails at the end
+      # (see "Fail job if tests failed" step), which is what triggers the
+      # GitHub failure-notification email.
+      - name: Run Playwright suite
+        id: playwright
+        run: npx playwright test
+        continue-on-error: true
+        env:
+          SITE_BASE_URL: https://rabiun.com
+
+      - name: Lighthouse performance run
+        id: lighthouse
+        run: npm run lighthouse
+        continue-on-error: true
+        env:
+          SITE_BASE_URL: https://rabiun.com
+
+      - name: Meta/Shopify tracking cross-check
+        id: crosscheck
+        run: npm run crosscheck
+        continue-on-error: true
+        env:
+          WINDSOR_API_KEY: ${{ secrets.WINDSOR_API_KEY }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+          SHOPIFY_ADMIN_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ADMIN_ACCESS_TOKEN }}
+
+      - name: Build dashboard
+        run: npm run dashboard
+
+      - name: Commit updated history CSVs back to repo
+        # Only the CSV history needs to live in git (it's the source of truth
+        # the dashboard is rebuilt from each run). dashboard/ itself is
+        # published straight to GitHub Pages below, not committed.
+        run: |
+          git config user.name "rabiun-qa-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "Daily QA run: $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Upload Playwright report (screenshots/traces on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/
+
+      - name: Fail job if any check failed
+        if: steps.playwright.outcome == 'failure' || steps.lighthouse.outcome == 'failure' || steps.crosscheck.outcome == 'failure'
+        run: |
+          echo "One or more QA checks failed today — see the Playwright report artifact and the dashboard."
+          exit 1
+
+  deploy-pages:
+    needs: qa
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
