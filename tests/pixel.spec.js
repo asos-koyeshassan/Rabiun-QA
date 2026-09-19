@@ -1,54 +1,55 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { PRODUCT_PAGES } = require('./pages');
+const { useUkMarket, addToCartButton, pixelEventName, isMetaPixelRequest } = require('./helpers');
 
-// Checks that the Meta Pixel actually fires the requests it's supposed to on
-// the two events that matter most for ad optimisation: PageView/ViewContent on
-// page load, and AddToCart on the add-to-cart click. This only proves the
-// browser SENT the request — it doesn't prove Meta accepted/processed it (that
-// requires Meta Events Manager, or the Windsor cross-check in
-// scripts/meta-shopify-crosscheck.mjs). Still useful: most real-world pixel
-// breakage is the tag not firing at all (a broken snippet, a blocked resource,
-// a JS error before it runs), which this catches directly.
+// Checks that the Meta Pixel actually fires on the two events that matter for
+// ad optimisation: PageView/ViewContent on load, AddToCart on the click. This
+// proves the browser SENT the event, not that Meta processed it (that's the
+// Windsor cross-check in scripts/meta-shopify-crosscheck.mjs). Still worth
+// having: most real pixel breakage is the tag not firing at all.
 
-function isMetaPixelRequest(url) {
-  return url.includes('facebook.com/tr') || url.includes('connect.facebook.net');
+test.beforeEach(async ({ page }) => {
+  await useUkMarket(page);
+});
+
+function collectPixelEvents(page) {
+  const events = [];
+  page.on('request', (req) => {
+    if (!isMetaPixelRequest(req.url())) return;
+    const ev = pixelEventName(req);
+    if (ev) events.push(ev);
+    else events.push('(pixel request, no ev name)');
+  });
+  return events;
 }
 
 for (const p of PRODUCT_PAGES) {
-  test(`${p.name} — Meta Pixel fires ViewContent on page load`, async ({ page }) => {
-    const pixelRequests = [];
-    page.on('request', (req) => {
-      if (isMetaPixelRequest(req.url())) pixelRequests.push(req.url());
-    });
-
+  test(`${p.name} — Meta Pixel fires PageView/ViewContent on page load`, async ({ page }) => {
+    const events = collectPixelEvents(page);
     await page.goto(p.path, { waitUntil: 'load' });
-    await page.waitForTimeout(2000); // pixel fires async after page scripts settle
+    await page.waitForTimeout(3000);
 
-    const fbTrCalls = pixelRequests.filter((u) => u.includes('facebook.com/tr'));
-    expect(fbTrCalls.length, `${p.name}: no Meta Pixel network calls seen at all — pixel may not be installed/loading`).toBeGreaterThan(0);
-
-    const viewContentCall = fbTrCalls.find((u) => /ViewContent|PageView/i.test(decodeURIComponent(u)));
-    expect(viewContentCall, `${p.name}: Pixel loaded but no PageView/ViewContent event fired`).toBeTruthy();
+    expect(events.length, `${p.name}: no Meta Pixel network calls at all — pixel not installed or not loading`).toBeGreaterThan(0);
+    expect(
+      events.some((e) => /^(PageView|ViewContent)$/i.test(e)),
+      `${p.name}: pixel loaded but no PageView/ViewContent fired. Events seen: ${events.join(', ')}`
+    ).toBeTruthy();
   });
 
   test(`${p.name} — Meta Pixel fires AddToCart on add-to-cart click`, async ({ page }) => {
-    const pixelRequests = [];
-    page.on('request', (req) => {
-      if (isMetaPixelRequest(req.url())) pixelRequests.push(req.url());
-    });
-
+    const events = collectPixelEvents(page);
     await page.goto(p.path, { waitUntil: 'load' });
 
-    let addToCartButton = page.getByRole('button', { name: /add to cart/i }).first();
-    if ((await addToCartButton.count()) === 0) {
-      addToCartButton = page.locator('button[name="add"]').first();
-    }
-    await addToCartButton.click();
-    await page.waitForTimeout(2000);
+    const button = await addToCartButton(page).resolve();
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+    await page.waitForTimeout(3000);
 
-    const addToCartCall = pixelRequests.find((u) => /AddToCart/i.test(decodeURIComponent(u)));
-    expect(addToCartCall, `${p.name}: clicked Add to cart but no Meta Pixel AddToCart event fired`).toBeTruthy();
+    expect(
+      events.some((e) => /^AddToCart$/i.test(e)),
+      `${p.name}: clicked Add to cart but no AddToCart pixel event fired. Events seen: ${events.join(', ')}`
+    ).toBeTruthy();
 
     await page.request.post('/cart/clear.js').catch(() => {});
   });

@@ -30,8 +30,12 @@ module.exports = defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'mobile-safari',
-      use: { ...devices['iPhone 13'] },
+      // iPhone viewport/UA, but run in Chromium. The iPhone device preset
+      // defaults to WebKit, which the workflow doesn't install — every mobile
+      // test in run #1 died on "Executable doesn't exist ... webkit". Chromium
+      // with mobile emulation is what we need for layout checks anyway.
+      name: 'mobile',
+      use: { ...devices['iPhone 13'], browserName: 'chromium' },
     },
   ],
 });
