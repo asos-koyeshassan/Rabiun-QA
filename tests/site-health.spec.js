@@ -1,10 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { PRODUCT_PAGES, OTHER_PAGES, REDIRECT_CHECKS } = require('./pages');
-const { useUkMarket, addToCartButton } = require('./helpers');
+const { useUkMarket, addToCartButton, blockAnalyticsBeacons } = require('./helpers');
 
 test.beforeEach(async ({ page }) => {
   await useUkMarket(page);
+  await blockAnalyticsBeacons(page);
 });
 
 // ---- Page loads + broken images + SEO basics, for every page in the list ----

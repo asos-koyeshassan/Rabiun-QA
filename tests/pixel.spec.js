@@ -7,6 +7,7 @@ const {
   installPixelHook,
   pixelEvents,
   installPixelNetworkCapture,
+  blockAnalyticsBeacons,
 } = require('./helpers');
 
 // Checks that the Meta Pixel actually fires on the two events that matter for
@@ -33,6 +34,7 @@ function describe(o) {
 for (const p of PRODUCT_PAGES) {
   test(`${p.name} — Meta Pixel fires PageView/ViewContent on page load`, async ({ page }) => {
     await useUkMarket(page);
+    await blockAnalyticsBeacons(page);
     await installPixelHook(page);
     const network = await installPixelNetworkCapture(page);
 
@@ -51,6 +53,7 @@ for (const p of PRODUCT_PAGES) {
 
   test(`${p.name} — Meta Pixel fires AddToCart on add-to-cart click`, async ({ page }) => {
     await useUkMarket(page);
+    await blockAnalyticsBeacons(page);
     await installPixelHook(page);
     const network = await installPixelNetworkCapture(page);
 

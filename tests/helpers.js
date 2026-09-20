@@ -90,17 +90,68 @@ function isMetaPixelRequest(url) {
 async function installPixelNetworkCapture(page) {
   const seen = [];
   await page.route(/facebook\.com\/tr/, async (route) => {
-    const req = route.request();
-    const url = req.url();
-    const body = req.postData() || '';
-    const m = decodeURIComponent(`${url} ${body}`).match(/[?&\s]ev=([A-Za-z]+)/);
-    const ev = m ? m[1] : null;
-    seen.push({ ev, method: req.method(), type: req.resourceType(), url: url.slice(0, 160), bodyLen: body.length });
-    // eslint-disable-next-line no-console
-    console.log(`[pixel] ${req.method()} ${req.resourceType()} ev=${ev} bodyLen=${body.length} ${url.slice(0, 120)}`);
-    await route.continue();
+    // Everything here is wrapped so a parsing surprise can never throw inside
+    // the route handler — run #4/#5 hit "URIError: URI malformed" from a raw
+    // decodeURIComponent on a ~26KB beacon body, which killed the test AND
+    // left the request un-continued. Always continue, whatever happens.
+    try {
+      const req = route.request();
+      const url = req.url();
+      const body = req.postData() || '';
+      const ev = extractPixelEventName(url, body);
+      seen.push({ ev, method: req.method(), type: req.resourceType(), url: url.slice(0, 160), bodyLen: body.length });
+      // eslint-disable-next-line no-console
+      console.log(
+        `[pixel] ${req.method()} ${req.resourceType()} ev=${ev} bodyLen=${body.length} ${url.slice(0, 100)} body[0:160]=${JSON.stringify(body.slice(0, 160))}`
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log(`[pixel] capture error (ignored): ${err && err.message}`);
+    } finally {
+      // Abort rather than continue: we've already recorded that the browser
+      // fired the event, which is what the test checks. Letting it through
+      // would send a real AddToCart/ViewContent to Meta from a US datacentre
+      // on every run, polluting the ad-optimisation signal (and Shopify's
+      // conversion analytics) with fake US "shoppers" who never check out.
+      await route.abort('blockedbyclient').catch(() => {});
+    }
   });
   return seen;
+}
+
+// Keep the test runner out of Shopify's own analytics for the same reason:
+// every run adds to cart from a US IP and never checks out, which shows up
+// in Shopify as US sessions with abandoned carts. Blocking the storefront
+// analytics beacons means the runs don't count as sessions at all. The cart
+// API calls themselves (add/clear) still go through, so add-to-cart is
+// tested for real.
+async function blockAnalyticsBeacons(page) {
+  await page.route(/monorail-edge\.shopifysvc\.com|\/api\/collect|google-analytics\.com|analytics\.google\.com|merchant-center-analytics\.goog|clarity\.ms/, (route) =>
+    route.abort('blockedbyclient').catch(() => {})
+  );
+}
+
+// Pull the Meta event name out of a pixel request. Tries, in order: the URL
+// query string, the POST body as form data, the POST body as JSON, then a
+// tolerant regex over both. Never throws.
+function extractPixelEventName(url, body) {
+  try {
+    const q = new URL(url).searchParams.get('ev');
+    if (q) return q;
+  } catch {}
+  if (body) {
+    try {
+      const f = new URLSearchParams(body).get('ev');
+      if (f) return f;
+    } catch {}
+    try {
+      const j = JSON.parse(body);
+      const ev = j && (j.ev || j.event || j.event_name || (Array.isArray(j) && j[0] && j[0].ev));
+      if (typeof ev === 'string') return ev;
+    } catch {}
+  }
+  const m = `${url} ${body}`.match(/(?:^|[?&\s"])ev(?:%22)?[=:"]+([A-Za-z]+)/);
+  return m ? m[1] : null;
 }
 
 module.exports = {
@@ -110,4 +161,5 @@ module.exports = {
   pixelEvents,
   isMetaPixelRequest,
   installPixelNetworkCapture,
+  blockAnalyticsBeacons,
 };
