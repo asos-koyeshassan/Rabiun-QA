@@ -81,4 +81,33 @@ function isMetaPixelRequest(url) {
   return url.includes('facebook.com/tr') || url.includes('connect.facebook.net');
 }
 
-module.exports = { useUkMarket, addToCartButton, installPixelHook, pixelEvents, isMetaPixelRequest };
+// Network-level capture of pixel events. Run #3 showed facebook.com/tr calls
+// going out (4 on load, 2 more on add-to-cart) while the fbq() hook above saw
+// nothing — so the events fire, but from somewhere the hook doesn't reach.
+// Intercepting with page.route() exposes the request body (beacon POSTs
+// included), which a plain 'request' listener does not. Each call is logged
+// so the CI output shows the exact shape if parsing ever needs adjusting.
+async function installPixelNetworkCapture(page) {
+  const seen = [];
+  await page.route(/facebook\.com\/tr/, async (route) => {
+    const req = route.request();
+    const url = req.url();
+    const body = req.postData() || '';
+    const m = decodeURIComponent(`${url} ${body}`).match(/[?&\s]ev=([A-Za-z]+)/);
+    const ev = m ? m[1] : null;
+    seen.push({ ev, method: req.method(), type: req.resourceType(), url: url.slice(0, 160), bodyLen: body.length });
+    // eslint-disable-next-line no-console
+    console.log(`[pixel] ${req.method()} ${req.resourceType()} ev=${ev} bodyLen=${body.length} ${url.slice(0, 120)}`);
+    await route.continue();
+  });
+  return seen;
+}
+
+module.exports = {
+  useUkMarket,
+  addToCartButton,
+  installPixelHook,
+  pixelEvents,
+  isMetaPixelRequest,
+  installPixelNetworkCapture,
+};

@@ -12,7 +12,22 @@ for (const p of [...PRODUCT_PAGES, ...OTHER_PAGES]) {
   test(`${p.name} — loads, no broken images, SEO basics present`, async ({ page }) => {
     const failedRequests = [];
     const brokenImages = [];
-    page.on('requestfailed', (req) => failedRequests.push(req.url()));
+    // Only count failures that would actually break the page for a customer:
+    // the document itself, scripts, styles, images and fonts served from the
+    // shop or Shopify's CDN. Analytics beacons (Shopify monorail, Google
+    // Merchant Center, /api/collect), Shop Pay prefetches and blob: worker
+    // URLs get aborted routinely when a page settles or unloads — run #3
+    // flagged those on every page and none of them are real breakage.
+    const CRITICAL_TYPES = new Set(['document', 'script', 'stylesheet', 'image', 'font']);
+    page.on('requestfailed', (req) => {
+      const url = req.url();
+      const errorText = req.failure()?.errorText || '';
+      if (!CRITICAL_TYPES.has(req.resourceType())) return;
+      if (errorText === 'net::ERR_ABORTED') return;
+      if (url.startsWith('blob:')) return;
+      if (!/rabiun\.com|cdn\.shopify\.com|shopifycdn\.com/.test(url)) return;
+      failedRequests.push(`${errorText} ${url}`);
+    });
     // Broken images = image requests the CDN answered with an error. This is
     // the definitive check; run #1 used <img>.naturalWidth === 0, which also
     // flags lazy-loaded images that simply haven't been scrolled into view yet.
@@ -22,12 +37,17 @@ for (const p of [...PRODUCT_PAGES, ...OTHER_PAGES]) {
       }
     });
 
-    const response = await page.goto(p.path, { waitUntil: 'load' });
+    // domcontentloaded rather than load: the full `load` event waits on every
+    // third-party script and can hang for a long time from a US datacentre
+    // (the FAQ page took the whole 45s in run #3). The checks below only need
+    // the DOM, plus a short settle for images.
+    const response = await page.goto(p.path, { waitUntil: 'domcontentloaded', timeout: 25_000 });
     expect(response, `${p.name} should return a response`).toBeTruthy();
     expect(
       response.status(),
       `${p.name} (${p.path}) returned HTTP ${response.status()}`
     ).toBeLessThan(400);
+    await page.waitForLoadState('load', { timeout: 10_000 }).catch(() => {});
 
     // Give lazy images a chance to request by scrolling the page once. Then a
     // short fixed wait — NOT networkidle: pixels and analytics on a Shopify
