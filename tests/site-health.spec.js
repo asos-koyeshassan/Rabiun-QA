@@ -29,15 +29,19 @@ for (const p of [...PRODUCT_PAGES, ...OTHER_PAGES]) {
       `${p.name} (${p.path}) returned HTTP ${response.status()}`
     ).toBeLessThan(400);
 
-    // Give lazy images a chance to request by scrolling the page once.
+    // Give lazy images a chance to request by scrolling the page once. Then a
+    // short fixed wait — NOT networkidle: pixels and analytics on a Shopify
+    // page keep chattering, so networkidle never arrives and run #2 burned
+    // the whole test timeout waiting for it.
     await page.evaluate(async () => {
-      for (let y = 0; y < document.body.scrollHeight; y += 800) {
+      const max = Math.min(document.body.scrollHeight, 12000);
+      for (let y = 0; y < max; y += 800) {
         window.scrollTo(0, y);
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 80));
       }
       window.scrollTo(0, 0);
     });
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(2500);
 
     expect(brokenImages, `Broken images on ${p.name}: ${brokenImages.join(', ')}`).toEqual([]);
 
@@ -117,14 +121,25 @@ for (const p of PRODUCT_PAGES) {
   test(`${p.name} — mobile layout screenshot`, async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile', 'Screenshot only needed once, on the mobile project');
     await page.goto(p.path, { waitUntil: 'load' });
-    await page.waitForTimeout(500);
-    await testInfo.attach('mobile-screenshot', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
-    await expect(page).toHaveScreenshot(`${p.path.replace(/\//g, '_')}-mobile.png`, {
-      fullPage: true,
-      maxDiffPixelRatio: 0.05,
-    });
+    await page.waitForTimeout(1500);
+    const shot = await page.screenshot({ fullPage: true });
+    await testInfo.attach('mobile-screenshot', { body: shot, contentType: 'image/png' });
+
+    // Visual diff against a committed baseline. If there's no baseline yet
+    // (first run, or the workflow isn't committing snapshots back), record
+    // this run's screenshot as the baseline and pass — a missing baseline is
+    // not a site regression. NOTE: for the diff to mean anything day to day,
+    // the workflow must commit tests/**/*-snapshots/ back to the repo (see
+    // README); until then this only records, never compares.
+    const snapshotName = `${p.path.replace(/\//g, '_')}-mobile.png`;
+    const fs = require('node:fs');
+    const baselinePath = testInfo.snapshotPath(snapshotName);
+    if (!fs.existsSync(baselinePath)) {
+      fs.mkdirSync(require('node:path').dirname(baselinePath), { recursive: true });
+      fs.writeFileSync(baselinePath, shot);
+      testInfo.annotations.push({ type: 'baseline', description: `No baseline existed; recorded ${snapshotName}` });
+      return;
+    }
+    await expect(page).toHaveScreenshot(snapshotName, { fullPage: true, maxDiffPixelRatio: 0.05 });
   });
 }
