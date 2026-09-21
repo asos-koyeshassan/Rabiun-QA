@@ -1,12 +1,11 @@
 name: Rabiun daily QA
 
 on:
+  push:
+    branches: [main]
   schedule:
-    # 07:00 Europe/London. GitHub Actions cron is UTC — 06:00 UTC covers both
-    # GMT and BST without needing to change this twice a year (worst case
-    # you're ~1hr off around the clock-change weeks, harmless for a QA run).
-    - cron: '0 6 * * *'
-  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
+    - cron: '7 6 * * *'
+  workflow_dispatch: {}
 
 permissions:
   contents: write # needed to commit updated data/*.csv and dashboard/ back to the repo
