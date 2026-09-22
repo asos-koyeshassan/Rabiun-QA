@@ -66,6 +66,7 @@ jobs:
         run: npm run dashboard
 
       - name: Commit updated history CSVs back to repo
+        if: github.event_name != 'pull_request'
         # Only the CSV history needs to live in git (it's the source of truth
         # the dashboard is rebuilt from each run). dashboard/ itself is
         # published straight to GitHub Pages below, not committed.
@@ -87,6 +88,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dashboard/
@@ -99,7 +101,7 @@ jobs:
 
   deploy-pages:
     needs: qa
-    if: always()
+    if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
