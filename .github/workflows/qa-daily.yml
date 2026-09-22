@@ -24,6 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+            # History CSVs live on the qa-data branch. Pull them into data/ before
+      # the Lighthouse and dashboard scripts add today's results.
+      - name: Restore history from qa-data branch
+        run: |
+          if git fetch --depth=1 origin +refs/heads/qa-data:refs/remotes/origin/qa-data; then
+            git checkout origin/qa-data -- data/
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -65,17 +73,26 @@ jobs:
       - name: Build dashboard
         run: npm run dashboard
 
-      - name: Commit updated history CSVs back to repo
+      - name: Save history CSVs to qa-data branch
         if: github.event_name != 'pull_request'
-        # Only the CSV history needs to live in git (it's the source of truth
-        # the dashboard is rebuilt from each run). dashboard/ itself is
-        # published straight to GitHub Pages below, not committed.
+        # main is protected (PRs + passing checks only), so the bot keeps the
+        # CSV history on its own qa-data branch instead of pushing to main.
         run: |
-          git config user.name "rabiun-qa-bot"
-          git config user.email "actions@github.com"
+          git config --global user.name "rabiun-qa-bot"
+          git config --global user.email "actions@github.com"
+          git worktree add --detach "$RUNNER_TEMP/qa-data"
+          cd "$RUNNER_TEMP/qa-data"
+          if git rev-parse -q --verify origin/qa-data >/dev/null; then
+            git checkout -q -B qa-data origin/qa-data
+          else
+            git checkout -q --orphan qa-data
+            git rm -rfq .
+          fi
+          mkdir -p data
+          cp "$GITHUB_WORKSPACE"/data/*.csv data/
           git add data/
           git diff --staged --quiet || git commit -m "Daily QA run: $(date -u +%Y-%m-%d)"
-          git push
+          git push origin qa-data
 
       - name: Upload Playwright report (screenshots/traces on failure)
         if: always()
