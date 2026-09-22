@@ -3,6 +3,8 @@ name: Rabiun daily QA
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '7 6 * * *'
   workflow_dispatch: {}
