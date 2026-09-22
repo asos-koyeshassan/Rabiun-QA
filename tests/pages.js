@@ -1,5 +1,4 @@
-// Central list of pages under test. Update here when the catalogue changes —
-// see strategy/release-log.md in the Rabiun project for what's currently live.
+// Central list of pages under test. Update here when the catalogue changes.
 module.exports.PRODUCT_PAGES = [
   {
     name: 'Jeans (Selvedge Denim)',
@@ -22,10 +21,7 @@ module.exports.OTHER_PAGES = [
   { name: 'FAQ / Contact', path: '/pages/contact' },
 ];
 
-// Known redirects worth checking daily. Empty on purpose — I don't have the exact
-// old URLs that have needed redirects in the past (e.g. the "-copy" hat URL bug
-// mentioned in ad-relaunch-plan.md, fixed 2026-09-17 — the log doesn't record the
-// precise broken URL, so I'm not guessing one). Add an entry here every time a
-// redirect bug gets found and fixed, so it's caught automatically if it regresses:
+// Known redirects worth checking daily. Add an entry every time a redirect bug
+// gets found and fixed, so it's caught automatically if it regresses:
 // { name: '...', from: '/products/old-slug', expectPathContains: '/products/new-slug' }
 module.exports.REDIRECT_CHECKS = [];

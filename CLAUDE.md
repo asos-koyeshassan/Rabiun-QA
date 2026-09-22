@@ -24,6 +24,15 @@ and Meta pixel integrity.
   anything but a direct, human-authenticated commit. Edit it by hand
   on GitHub's website.
 
+## Public repo — privacy rules
+This repo, its Actions logs and the GitHub Pages dashboard are all public.
+- Never write customer data, order/sales figures, ad spend or ad account
+  details to `data/`, the dashboard, test output or `console.log`.
+  Scripts that read private APIs log only pass/fail or match/mismatch.
+- Don't reference private business docs (ad plans, release logs, strategy
+  notes) in code comments or the README.
+- Secrets live in GitHub Actions secrets only — never in files.
+
 ## Workflow
 - Branch → PR → suite runs on the PR → merge on green.
 - Daily CSV history commits land straight on `main` via the bot.

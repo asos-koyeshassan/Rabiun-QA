@@ -4,21 +4,13 @@
 // tracking break worth an alert — much stronger evidence than "the pixel
 // fired a network request" (tests/pixel.spec.js checks that separately).
 //
-// IMPORTANT — this needs a calibration pass before you trust it:
-// I built this against Windsor.ai's documented REST API shape
-// (https://connectors.windsor.ai/<connector>?api_key=...&fields=...&date_from=...&date_to=...),
-// using the account already connected in your Rabiun project ("Rabiun Primary
-// Ads", facebook connector, account id 3568812379926749). I do NOT have a
-// Windsor API key to actually run this against, so the field names below
-// (`actions`, `action_type`) are Windsor's standard Meta Ads field names but
-// unverified end-to-end. First run: check the console output against what you
-// see in Meta Events Manager for the same day, and adjust FIELD names below
-// if they don't line up. Get your API key from Windsor.ai → Settings → API.
+// Field names (`actions`, `action_type`) follow Windsor's standard Meta Ads
+// schema. Verify them against Meta Events Manager on first run and adjust if
+// they don't line up. Get an API key from Windsor.ai → Settings → API.
 //
-// Also note (from ad-relaunch-plan.md): as of 2026-09-19 all 8 ads in this
-// account are PAUSED, so Meta events will legitimately be near-zero until ads
-// relaunch. This check is most useful as a "did tracking silently break"
-// signal once ads are live again — don't be alarmed by zeros while paused.
+// Privacy: this repo is public, and so are its Actions logs. Log only the
+// match/mismatch result — never order counts, event counts or API response
+// bodies.
 
 import fetch from 'node-fetch';
 
@@ -40,7 +32,7 @@ async function getMetaEventCounts(date) {
   url.searchParams.set('fields', 'date,actions,action_values');
 
   const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`Windsor API returned ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Windsor API returned ${res.status}`);
   const data = await res.json();
   const rows = data.data || data || [];
 
@@ -61,7 +53,7 @@ async function getShopifyOrderCount(date) {
   const res = await fetch(url, {
     headers: { 'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN },
   });
-  if (!res.ok) throw new Error(`Shopify API returned ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Shopify API returned ${res.status}`);
   const data = await res.json();
   return (data.orders || []).length;
 }
@@ -78,20 +70,14 @@ async function main() {
   const date = yesterday();
   const [meta, shopifyOrders] = await Promise.all([getMetaEventCounts(date), getShopifyOrderCount(date)]);
 
-  console.log(`Cross-check for ${date}:`);
-  console.log(`  Shopify orders: ${shopifyOrders}`);
-  console.log(`  Meta Purchase events (via Windsor): ${meta.purchases}`);
-  console.log(`  Meta AddToCart events (via Windsor): ${meta.addToCarts}`);
-
   if (shopifyOrders > 0 && meta.purchases === 0) {
     console.error(
-      `MISMATCH: Shopify recorded ${shopifyOrders} order(s) on ${date} but Meta shows 0 Purchase events. ` +
-        `This looks like a tracking break, not normal variance — worth checking Meta Events Manager. ` +
-        `(If ads are currently paused, this may be expected — see ad-relaunch-plan.md.)`
+      `MISMATCH on ${date}: Shopify recorded orders but Meta shows 0 Purchase events. ` +
+        `Likely a tracking break (or ads are paused) — check Meta Events Manager.`
     );
     process.exitCode = 1; // fails the CI step so it surfaces in the daily email
   } else {
-    console.log('No mismatch detected.');
+    console.log(`Cross-check for ${date}: no mismatch detected.`);
   }
 }
 

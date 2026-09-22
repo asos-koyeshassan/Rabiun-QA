@@ -58,8 +58,7 @@ GitHub Actions' free tier — no server, no paid service.
 
 I could not run this suite against the live rabiun.com site from this
 session — the cloud sandbox's network policy blocks direct access to
-rabiun.com (the same blocker noted in `ad-relaunch-plan.md` for video
-uploads). So what I've verified here is: the test files parse correctly, all
+rabiun.com. So what I've verified here is: the test files parse correctly, all
 36 tests list as expected, and the dashboard/CSV-logging scripts produce
 correct output against mock data. What I have **not** verified is that the
 CSS/DOM selectors match the live site exactly, or that the Windsor API field
