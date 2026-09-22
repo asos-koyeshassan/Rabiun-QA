@@ -27,7 +27,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'desktop-chrome',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], userAgent: 'RabiunQA/1.0', },
     },
     {
       // iPhone viewport/UA, but run in Chromium. The iPhone device preset
