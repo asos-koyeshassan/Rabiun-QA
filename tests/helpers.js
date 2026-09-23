@@ -125,8 +125,17 @@ async function installPixelNetworkCapture(page) {
 // analytics beacons means the runs don't count as sessions at all. The cart
 // API calls themselves (add/clear) still go through, so add-to-cart is
 // tested for real.
+// Shopify also sends a same-origin beacon (/.well-known/shopify/monorail/...),
+// which the first version of this list missed, so runs kept counting as US
+// sessions. facebook.com/tr is here too so the non-pixel tests stop sending
+// Meta fake PageViews/AddToCarts; the pixel tests register their capture
+// route after this one, so it still sees (then aborts) every event first.
+// scripts/lighthouse-log.mjs blocks the same list.
+const ANALYTICS_BEACONS =
+  /\/\.well-known\/shopify\/monorail|monorail-edge\.shopifysvc\.com|\/api\/collect|google-analytics\.com|analytics\.google\.com|merchant-center-analytics\.goog|clarity\.ms|facebook\.com\/tr/;
+
 async function blockAnalyticsBeacons(page) {
-  await page.route(/monorail-edge\.shopifysvc\.com|\/api\/collect|google-analytics\.com|analytics\.google\.com|merchant-center-analytics\.goog|clarity\.ms/, (route) =>
+  await page.route(ANALYTICS_BEACONS, (route) =>
     route.abort('blockedbyclient').catch(() => {})
   );
 }

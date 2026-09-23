@@ -33,6 +33,18 @@ async function runLighthouseFor(url) {
       output: 'json',
       onlyCategories: ['performance', 'seo', 'accessibility', 'best-practices'],
       formFactor: 'mobile',
+      // Same beacons tests/helpers.js blocks, so Lighthouse runs don't show
+      // up as Shopify sessions or Meta events.
+      blockedUrlPatterns: [
+        '*/.well-known/shopify/monorail*',
+        '*monorail-edge.shopifysvc.com*',
+        '*/api/collect*',
+        '*google-analytics.com*',
+        '*analytics.google.com*',
+        '*merchant-center-analytics.goog*',
+        '*clarity.ms*',
+        '*facebook.com/tr*',
+      ],
       screenEmulation: { mobile: true, width: 390, height: 844, deviceScaleFactor: 2, disabled: false },
     });
     return result.lhr;
