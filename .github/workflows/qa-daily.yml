@@ -69,6 +69,14 @@ jobs:
           WINDSOR_API_KEY: ${{ secrets.WINDSOR_API_KEY }}
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
           SHOPIFY_ADMIN_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ADMIN_ACCESS_TOKEN }}
+          
+      - name: Shopify sessions trend
+        id: sessions
+        run: npm run sessions
+        continue-on-error: true
+        env:
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+          SHOPIFY_ADMIN_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ADMIN_ACCESS_TOKEN }}
 
       - name: Build dashboard
         run: npm run dashboard
