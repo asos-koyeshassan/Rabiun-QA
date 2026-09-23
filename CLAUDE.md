@@ -37,9 +37,13 @@ and Meta pixel integrity.
 - `data/check-history.csv` keeps one row per check per run. It's the raw
   material for per-check stats and can't be backfilled, so don't drop it.
 - Shopify sessions go public only as a trend: `scripts/shopify-sessions.mjs`
-  writes 7-day rolling averages indexed to Aug 2026 = 100. Never write raw
-  session counts, and never the baseline. `changes.csv` (on `main`, edited
-  by hand) is the public list of site/social changes shown as chart markers.
+  turns a private export into 7-day rolling averages indexed to Aug 2026 =
+  100, in `insights/sessions-trend.csv`. Never write raw session counts or
+  the baseline. The export is pulled outside CI (Shopify's reports API needs
+  Level 2 customer data access, which CI must not hold), kept outside the
+  repo, and the CSV lands on `main` by PR.
+- `insights/changes.csv` (edited by hand) is the public list of site/social
+  changes shown as chart markers.
 - Planned: a game-style theme matching rabiun.com, once there's enough
   history to make it worth showing off.
 
@@ -57,11 +61,13 @@ This repo, its Actions logs and the GitHub Pages dashboard are all public.
 Customer security outranks every feature, metric and dashboard goal. If
 something can't be built without more access to customer data, don't
 build it; raise it with the owner instead.
-- Store tokens stay read-only with the fewest scopes that work (today:
-  `read_orders`, `read_reports`). Don't add scopes or protected customer
-  data access unless Shopify blocks the feature without it.
-- Scripts ask for totals or bare IDs (e.g. `fields=id`), never customer
-  fields (names, emails, addresses), even if the token could read them.
+- CI's only store credential is a Dev Dashboard app (client ID + secret,
+  swapped each run for a 24-hour token that gets log-masked) with
+  `read_orders` only and at most Level 1 protected customer data. Never give
+  CI `read_reports`, Level 2 customer data (names, emails, addresses) or
+  any write scope.
+- Scripts ask for counts (e.g. `ordersCount`), never order records or
+  customer fields, even if the token could read them.
 - Secrets go only into the `env` of the steps that need them. The workflow
   uses `pull_request`, never `pull_request_target`, so PRs from forks
   never get secrets.
