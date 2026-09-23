@@ -19,10 +19,12 @@ and Meta pixel integrity.
   `page.route` instead.
 - `networkidle` never fires on Shopify pages (constant pixel chatter);
   use `domcontentloaded`.
-- `.github/workflows/qa-daily.yml` cannot be edited by an AI coding
-  tool's file writes — GitHub blocks workflow-file changes from 
-  anything but a direct, human-authenticated commit. Edit it by hand
-  on GitHub's website.
+- `.github/workflows/qa-daily.yml` is edited by hand by the owner, on
+  GitHub's website. The workflow runs with the repo's secrets, so a human
+  signs off on every change, and Claude Code's safety check blocks Claude
+  from pushing workflow changes itself. (GitHub itself would allow it: the
+  local `gh` login has the `workflow` scope.) Claude writes the exact lines
+  and line numbers, then reviews the owner's commit.
 
 ## Dashboard
 - Data and looks are split. `scripts/dashboard/data.mjs` records each run
@@ -55,4 +57,8 @@ This repo, its Actions logs and the GitHub Pages dashboard are all public.
   them into `data/` (git-ignored on `main`), appends today's results, and the
   bot commits them back to `qa-data`. PR runs only test: they skip saving
   history and publishing the dashboard.
+- The workflow queue is split: PR runs get their own queue per PR (a new
+  push cancels that PR's older run), while push/schedule/manual runs share
+  the `pages` queue and never cancel each other, since they save history to
+  `qa-data` and publish the dashboard.
 - Refer to PRs as number + short name + link, e.g. "#2 (privacy clean-up)".
