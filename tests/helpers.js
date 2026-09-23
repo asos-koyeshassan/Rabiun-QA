@@ -85,8 +85,9 @@ function isMetaPixelRequest(url) {
 // going out (4 on load, 2 more on add-to-cart) while the fbq() hook above saw
 // nothing — so the events fire, but from somewhere the hook doesn't reach.
 // Intercepting with page.route() exposes the request body (beacon POSTs
-// included), which a plain 'request' listener does not. Each call is logged
-// so the CI output shows the exact shape if parsing ever needs adjusting.
+// included), which a plain 'request' listener does not. Each call logs only
+// its method, type, parsed event name and body length: the logs are public,
+// so no request bodies or URLs (they carry the pixel ID and page state).
 async function installPixelNetworkCapture(page) {
   const seen = [];
   await page.route(/facebook\.com\/tr/, async (route) => {
@@ -101,9 +102,7 @@ async function installPixelNetworkCapture(page) {
       const ev = extractPixelEventName(url, body);
       seen.push({ ev, method: req.method(), type: req.resourceType(), url: url.slice(0, 160), bodyLen: body.length });
       // eslint-disable-next-line no-console
-      console.log(
-        `[pixel] ${req.method()} ${req.resourceType()} ev=${ev} bodyLen=${body.length} ${url.slice(0, 100)} body[0:160]=${JSON.stringify(body.slice(0, 160))}`
-      );
+      console.log(`[pixel] ${req.method()} ${req.resourceType()} ev=${ev} bodyLen=${body.length}`);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.log(`[pixel] capture error (ignored): ${err && err.message}`);
