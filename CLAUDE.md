@@ -36,13 +36,18 @@ and Meta pixel integrity.
   `SCHEMA_VERSION` if a field is renamed or removed.
 - `data/check-history.csv` keeps one row per check per run. It's the raw
   material for per-check stats and can't be backfilled, so don't drop it.
+- Shopify sessions go public only as a trend: `scripts/shopify-sessions.mjs`
+  writes 7-day rolling averages indexed to Aug 2026 = 100. Never write raw
+  session counts, and never the baseline. `changes.csv` (on `main`, edited
+  by hand) is the public list of site/social changes shown as chart markers.
 - Planned: a game-style theme matching rabiun.com, once there's enough
   history to make it worth showing off.
 
 ## Public repo — privacy rules
 This repo, its Actions logs and the GitHub Pages dashboard are all public.
-- Never write customer data, order/sales figures, ad spend or ad account
-  details to `data/`, the dashboard, test output or `console.log`.
+- Never write customer data, order/sales figures, conversion rate, raw
+  session counts, ad spend or ad account details to `data/`, the dashboard,
+  test output or `console.log`.
   Scripts that read private APIs log only pass/fail or match/mismatch.
 - Don't reference private business docs (ad plans, release logs, strategy
   notes) in code comments or the README.
