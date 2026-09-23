@@ -22,9 +22,9 @@ module.exports = defineConfig({
     baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // Never let a Shopify preview-theme cookie leak into a run — the site's own
-    // release process notes that a stale preview cookie can make an old/unpublished
-    // theme render on a plain rabiun.com URL. Fresh context per test avoids that.
+    // Never let a Shopify preview-theme cookie leak into a run: a stale preview
+    // cookie can make an old or unpublished theme render on a plain rabiun.com
+    // URL. Fresh context per test avoids that.
     storageState: undefined,
   },
   projects: [
