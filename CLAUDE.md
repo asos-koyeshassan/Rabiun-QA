@@ -24,6 +24,19 @@ and Meta pixel integrity.
   anything but a direct, human-authenticated commit. Edit it by hand
   on GitHub's website.
 
+## Dashboard
+- Data and looks are split. `scripts/dashboard/data.mjs` records each run
+  into `data/*.csv` and works out every number (streaks, pass rates,
+  per-check flakiness, Lighthouse trends), which is also published as
+  `dashboard/data.json`. Themes in `scripts/dashboard/themes/` only draw that
+  object; `DASHBOARD_THEME` picks one (default `basic`).
+- New metric → add it in `data.mjs`. New look → add a theme file. Bump
+  `SCHEMA_VERSION` if a field is renamed or removed.
+- `data/check-history.csv` keeps one row per check per run. It's the raw
+  material for per-check stats and can't be backfilled, so don't drop it.
+- Planned: a game-style theme matching rabiun.com, once there's enough
+  history to make it worth showing off.
+
 ## Public repo — privacy rules
 This repo, its Actions logs and the GitHub Pages dashboard are all public.
 - Never write customer data, order/sales figures, ad spend or ad account
