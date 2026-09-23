@@ -10,6 +10,9 @@ module.exports = defineConfig({
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0, // one retry in CI so a flaky network blip doesn't cry wolf
   outputDir: 'test-results/artifacts',
+  // Screenshot baselines live under data/ so the workflow restores them from,
+  // and saves them to, the qa-data branch along with the history CSVs.
+  snapshotPathTemplate: 'data/snapshots/{testFileName}/{arg}{-projectName}{ext}',
   reporter: [
     ['list'],
     ['json', { outputFile: 'test-results/results.json' }],
