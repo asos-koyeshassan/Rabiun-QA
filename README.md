@@ -37,7 +37,7 @@ concrete, measurable thing to fix, and the daily trend will show whether the fix
 against the day before, but every run starts on a fresh machine with no previous screenshot, so it
 saved a new one and passed. It never compared anything. The screenshots now live on the `qa-data`
 branch, and the check compares only the product section: the "Worn by you" customer-photo carousel
-changes on every load, and customers' photos shouldn't be stored in a public repo anyway. It was
+rotates on every load and changes as new customers are added, so it can't be a stable baseline. It was
 verified to fail on a real change and to stay stable across repeat runs.
 
 **Getting from 0 to 33 passing tests.** The first run passed **0 of 33**. Two days later it passed

@@ -157,9 +157,9 @@ for (const p of PRODUCT_PAGES) {
     const hadBaseline = fs.existsSync(baselinePath);
     // Screenshot only the product section (gallery, title, price, size,
     // add-to-cart, info tabs): the layout that matters for a sale. The full
-    // page isn't stable — the "Worn by you" customer-photo carousel rotates
-    // and lower sections load late and change the page height. It also keeps
-    // customers' photos out of baselines, which are saved to a public branch.
+    // page isn't stable: the "Worn by you" customer-photo carousel rotates on
+    // every load and changes as new customers are added, and lower sections
+    // load late and change the page height. Baselines stick to product content.
     const productSection = page.locator('.shopify-section').filter({ hasText: /add to cart/i }).first();
     await expect(productSection, `${p.name}: product section not found`).toBeVisible();
     try {
