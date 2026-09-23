@@ -1,5 +1,5 @@
 // Runs Lighthouse against the homepage + 3 product pages, appends one row per
-// page per day to data/lighthouse-history.csv (committed back to the repo by
+// page per day to data/lighthouse-history.csv (saved to the qa-data branch by
 // the workflow), so scores are a time series, not a one-off number.
 import lighthouse from 'lighthouse';
 import * as chromeLauncher from 'chrome-launcher';
