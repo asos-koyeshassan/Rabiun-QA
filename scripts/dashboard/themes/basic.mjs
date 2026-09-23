@@ -77,6 +77,54 @@ function renderTrackingTile(t) {
   return `<span class="status ${cls}">${label}</span> &nbsp; ${detail}${record}`;
 }
 
+// Shopify sessions trend (indexed, never raw counts) with the change log as
+// markers, so a jump can be lined up against what changed that week.
+function renderSessions({ history, latest, weekOnWeek, baselineLabel }, changes) {
+  if (!history.length) return '<p style="color:#999">Not connected yet.</p>';
+  const width = 720,
+    height = 220,
+    pad = 30;
+  const dates = history.map((r) => r.date);
+  const xOf = (date) => pad + (dates.length > 1 ? (dates.indexOf(date) / (dates.length - 1)) * (width - pad * 2) : 0);
+  const max = Math.max(100, ...history.map((r) => r.total)) * 1.1;
+  const yOf = (v) => height - pad - (v / max) * (height - pad * 2);
+  const series = [
+    ['total', '#eeeeee', 'All visitors'],
+    ['social', '#e07a3f', 'Social'],
+    ['direct', '#3f7ae0', 'Direct'],
+  ];
+
+  const lines = series
+    .map(([key, color]) => `<polyline points="${history.map((r) => `${xOf(r.date)},${yOf(r[key])}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2" />`)
+    .join('\n');
+  const botShading = history
+    .filter((r) => r.botAdjusted)
+    .map((r) => `<rect x="${xOf(r.date) - 3}" y="${pad}" width="6" height="${height - pad * 2}" fill="#3a321e" />`)
+    .join('');
+  const markers = changes
+    .filter((c) => dates.includes(c.date))
+    .map((c) => `<line x1="${xOf(c.date)}" y1="${pad}" x2="${xOf(c.date)}" y2="${height - pad}" stroke="#4ade80" stroke-dasharray="3,3"><title>${escapeHtml(`${c.date} · ${c.channel}: ${c.change}`)}</title></line>`)
+    .join('');
+  const legend = series.map(([, color, label]) => `<span style="color:${color}">&#9679;</span> ${label}`).join('&nbsp;&nbsp;');
+  const wow = weekOnWeek == null ? '' : ` · ${weekOnWeek >= 0 ? '+' : ''}${Math.round(weekOnWeek * 100)}% vs a week earlier`;
+  const changeList = changes.length
+    ? `<ul class="changes">${changes.map((c) => `<li>${escapeHtml(c.date)} · ${escapeHtml(c.channel)}: ${escapeHtml(c.change)}</li>`).join('')}</ul>`
+    : '';
+
+  return `
+    <div class="stats" style="margin:0 0 10px">Latest 7-day average: <b style="color:#eee">${latest.total}</b> (${baselineLabel})${wow}</div>
+    <svg viewBox="0 0 ${width} ${height}" style="width:100%;max-width:${width}px;background:#111;border-radius:8px">
+      ${botShading}
+      <line x1="${pad}" y1="${yOf(100)}" x2="${width - pad}" y2="${yOf(100)}" stroke="#333" stroke-dasharray="2,4" />
+      <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#444" />
+      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#444" />
+      ${markers}
+      ${lines}
+    </svg>
+    <div style="margin-top:8px;font-size:13px">${legend} &nbsp;&nbsp;<span style="color:#4ade80">┆</span> change made &nbsp;&nbsp;<span style="color:#fbbf24">▮</span> QA bot traffic removed</div>
+    ${changeList}`;
+}
+
 export function render(data) {
   const run = data.latestRun || { passed: 0, failed: 0, skipped: 0, checks: [] };
   const failures = run.checks.filter((c) => c.status === 'failed');
@@ -104,6 +152,7 @@ export function render(data) {
   .row-fail td { color:#f87171; }
   .row-pass td { color:#ccc; }
   ul.failures { font-size:13px; color:#f87171; }
+  ul.changes { font-size:13px; color:#ccc; padding-left:18px; }
 </style>
 </head>
 <body>
@@ -121,6 +170,11 @@ export function render(data) {
       clean-run streak ${s.currentCleanStreak} (best ${s.longestCleanStreak}) ·
       ${pct(s.cleanRunRate30)} of the last 30 runs fully green
     </div>
+  </section>
+
+  <section>
+    <h2 style="font-size:15px">Store visitors trend (Shopify sessions, 7-day average)</h2>
+    ${renderSessions(data.sessions, data.changes)}
   </section>
 
   <section>

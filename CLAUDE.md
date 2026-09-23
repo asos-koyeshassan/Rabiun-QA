@@ -36,17 +36,39 @@ and Meta pixel integrity.
   `SCHEMA_VERSION` if a field is renamed or removed.
 - `data/check-history.csv` keeps one row per check per run. It's the raw
   material for per-check stats and can't be backfilled, so don't drop it.
+- Shopify sessions go public only as a trend: `scripts/shopify-sessions.mjs`
+  writes 7-day rolling averages indexed to Aug 2026 = 100. Never write raw
+  session counts, and never the baseline. `changes.csv` (on `main`, edited
+  by hand) is the public list of site/social changes shown as chart markers.
 - Planned: a game-style theme matching rabiun.com, once there's enough
   history to make it worth showing off.
 
 ## Public repo — privacy rules
 This repo, its Actions logs and the GitHub Pages dashboard are all public.
-- Never write customer data, order/sales figures, ad spend or ad account
-  details to `data/`, the dashboard, test output or `console.log`.
+- Never write customer data, order/sales figures, conversion rate, raw
+  session counts, ad spend or ad account details to `data/`, the dashboard,
+  test output or `console.log`.
   Scripts that read private APIs log only pass/fail or match/mismatch.
 - Don't reference private business docs (ad plans, release logs, strategy
   notes) in code comments or the README.
 - Secrets live in GitHub Actions secrets only — never in files.
+
+## Customer security comes first
+Customer security outranks every feature, metric and dashboard goal. If
+something can't be built without more access to customer data, don't
+build it; raise it with the owner instead.
+- Store tokens stay read-only with the fewest scopes that work (today:
+  `read_orders`, `read_reports`). Don't add scopes or protected customer
+  data access unless Shopify blocks the feature without it.
+- Scripts ask for totals or bare IDs (e.g. `fields=id`), never customer
+  fields (names, emails, addresses), even if the token could read them.
+- Secrets go only into the `env` of the steps that need them. The workflow
+  uses `pull_request`, never `pull_request_target`, so PRs from forks
+  never get secrets.
+- Any PR touching a script that reads secrets, or the workflow, gets
+  checked for new API fields and new log/output lines before merge.
+- Before a change touches store APIs, tokens or published data, tell the
+  owner up front what becomes public and what the token could reach.
 
 ## Workflow
 - Branch → PR → suite runs on the PR → merge on green.

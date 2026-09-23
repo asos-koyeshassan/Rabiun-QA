@@ -56,3 +56,10 @@ export function appendCsv(filePath, columns, rows) {
   }
   if (rows.length) fs.appendFileSync(filePath, rows.map((r) => columns.map((c) => formatValue(r[c])).join(',')).join('\n') + '\n');
 }
+
+// Rewrites the whole file, for history that gets corrected rather than appended.
+export function writeCsv(filePath, columns, rows) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const lines = rows.map((r) => columns.map((c) => formatValue(r[c])).join(','));
+  fs.writeFileSync(filePath, [columns.join(','), ...lines].join('\n') + '\n');
+}

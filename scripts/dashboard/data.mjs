@@ -6,7 +6,8 @@
 // Public repo: only QA facts go in here (check names, pass/fail, timings,
 // Lighthouse scores). Never test stdout/annotations, which can carry
 // tracking IDs. From the private-API cross-check, only its one-word result
-// (match / mismatch / error / skipped), never counts.
+// (match / mismatch / error / skipped), never counts. Shopify sessions only
+// as an index (baseline = 100), never raw counts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readCsv, appendCsv } from './csv.mjs';
@@ -19,6 +20,10 @@ const RUN_HISTORY_CSV = path.join(ROOT, 'data', 'run-history.csv');
 const CHECK_HISTORY_CSV = path.join(ROOT, 'data', 'check-history.csv');
 const LIGHTHOUSE_CSV = path.join(ROOT, 'data', 'lighthouse-history.csv');
 const TRACKING_CSV = path.join(ROOT, 'data', 'tracking-history.csv');
+const SESSIONS_CSV = path.join(ROOT, 'data', 'sessions-trend.csv');
+// Hand-kept, public list of changes to the site or socials, so the sessions
+// chart can show what happened when. Lives on main, not qa-data.
+const CHANGES_CSV = path.join(ROOT, 'changes.csv');
 
 // New columns only ever go on the end (see appendCsv).
 const RUN_COLUMNS = ['date', 'passed', 'failed', 'skipped', 'time', 'flaky', 'duration_ms'];
@@ -166,6 +171,33 @@ function trackingData(rows) {
   };
 }
 
+// Sessions trend from scripts/shopify-sessions.mjs: 7-day rolling averages,
+// indexed so the baseline month's daily average = 100.
+function sessionsData(rows) {
+  const history = rows.map((r) => ({
+    date: r.date,
+    total: num(r.total),
+    direct: num(r.direct),
+    social: num(r.social),
+    search: num(r.search),
+    botAdjusted: r.bot_adjusted === '1',
+  }));
+  const latest = history.at(-1) || null;
+  const weekAgo = latest && history.find((r) => r.date === shiftDate(latest.date, -7));
+  return {
+    baselineLabel: 'Aug 2026 daily average = 100',
+    latest,
+    weekOnWeek: weekAgo?.total ? (latest.total - weekAgo.total) / weekAgo.total : null,
+    history,
+  };
+}
+
+function shiftDate(date, days) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function buildDashboardData({ record = true } = {}) {
   const thisRun = readThisRun();
   if (thisRun && record) recordRun(thisRun);
@@ -200,5 +232,7 @@ export function buildDashboardData({ record = true } = {}) {
     runHistory: runs,
     lighthouse: lighthouseData(readCsv(LIGHTHOUSE_CSV)),
     tracking: trackingData(readCsv(TRACKING_CSV)),
+    sessions: sessionsData(readCsv(SESSIONS_CSV)),
+    changes: readCsv(CHANGES_CSV).filter((c) => c.date),
   };
 }
