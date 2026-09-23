@@ -10,13 +10,25 @@
 //
 // Privacy: this repo is public, and so are its Actions logs. Log only the
 // match/mismatch result — never order counts, event counts or API response
-// bodies.
+// bodies. The same goes for data/tracking-history.csv, which the public
+// dashboard reads: one word per run (match / mismatch / error / skipped).
 
 import fetch from 'node-fetch';
+import path from 'node:path';
+import { appendCsv } from './dashboard/csv.mjs';
 
 const WINDSOR_API_KEY = process.env.WINDSOR_API_KEY;
 const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN; // e.g. rabiun.myshopify.com
 const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+const HISTORY_CSV = path.join(process.cwd(), 'data', 'tracking-history.csv');
+
+function record(forDate, result) {
+  const now = new Date().toISOString();
+  appendCsv(HISTORY_CSV, ['date', 'time', 'for_date', 'result'], [
+    { date: now.slice(0, 10), time: now.slice(11, 19), for_date: forDate, result },
+  ]);
+}
 
 function yesterday() {
   const d = new Date();
@@ -64,6 +76,7 @@ async function main() {
       'Skipping Meta/Shopify cross-check: WINDSOR_API_KEY, SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN not set. ' +
         'This check is optional — the rest of the suite runs fine without it.'
     );
+    record(yesterday(), 'skipped');
     return;
   }
 
@@ -76,12 +89,15 @@ async function main() {
         `Likely a tracking break (or ads are paused) — check Meta Events Manager.`
     );
     process.exitCode = 1; // fails the CI step so it surfaces in the daily email
+    record(date, 'mismatch');
   } else {
     console.log(`Cross-check for ${date}: no mismatch detected.`);
+    record(date, 'match');
   }
 }
 
 main().catch((err) => {
   console.error('Cross-check script error:', err.message);
   process.exitCode = 1;
+  record(yesterday(), 'error');
 });

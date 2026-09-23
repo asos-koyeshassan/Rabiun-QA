@@ -5,7 +5,8 @@
 //
 // Public repo: only QA facts go in here (check names, pass/fail, timings,
 // Lighthouse scores). Never test stdout/annotations, which can carry
-// tracking IDs, and never anything from the private-API cross-check.
+// tracking IDs. From the private-API cross-check, only its one-word result
+// (match / mismatch / error / skipped), never counts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readCsv, appendCsv } from './csv.mjs';
@@ -17,6 +18,7 @@ const RESULTS_JSON = path.join(ROOT, 'test-results', 'results.json');
 const RUN_HISTORY_CSV = path.join(ROOT, 'data', 'run-history.csv');
 const CHECK_HISTORY_CSV = path.join(ROOT, 'data', 'check-history.csv');
 const LIGHTHOUSE_CSV = path.join(ROOT, 'data', 'lighthouse-history.csv');
+const TRACKING_CSV = path.join(ROOT, 'data', 'tracking-history.csv');
 
 // New columns only ever go on the end (see appendCsv).
 const RUN_COLUMNS = ['date', 'passed', 'failed', 'skipped', 'time', 'flaky', 'duration_ms'];
@@ -142,6 +144,28 @@ function lighthouseData(rows) {
   return { pages, latest, history };
 }
 
+// Meta vs Shopify cross-check. It runs several times a day for the same
+// "yesterday", so each day is judged by its last real result — a later
+// error or skip doesn't erase a match or mismatch already found.
+function trackingData(rows) {
+  const isReal = (result) => result === 'match' || result === 'mismatch';
+  const byDay = new Map();
+  for (const r of rows) {
+    if (isReal(r.result) || !isReal(byDay.get(r.for_date))) byDay.set(r.for_date, r.result);
+  }
+  const days = [...byDay].map(([date, result]) => ({ date, result })).sort((a, b) => a.date.localeCompare(b.date));
+  const checked = days.filter((d) => isReal(d.result));
+  let matchStreakDays = 0;
+  for (let i = days.length - 1; i >= 0 && days[i].result === 'match'; i--) matchStreakDays++;
+  return {
+    latest: rows.length ? { date: rows.at(-1).date, forDate: rows.at(-1).for_date, result: rows.at(-1).result } : null,
+    daysChecked: checked.length,
+    daysMatched: checked.filter((d) => d.result === 'match').length,
+    matchStreakDays,
+    history: days,
+  };
+}
+
 export function buildDashboardData({ record = true } = {}) {
   const thisRun = readThisRun();
   if (thisRun && record) recordRun(thisRun);
@@ -175,5 +199,6 @@ export function buildDashboardData({ record = true } = {}) {
     checks: checkStats(readCsv(CHECK_HISTORY_CSV)),
     runHistory: runs,
     lighthouse: lighthouseData(readCsv(LIGHTHOUSE_CSV)),
+    tracking: trackingData(readCsv(TRACKING_CSV)),
   };
 }

@@ -60,6 +60,23 @@ function renderLighthouseChart({ pages, history }) {
     <div style="margin-top:8px;font-size:13px">${legend}</div>`;
 }
 
+// Meta pixel vs Shopify orders cross-check (scripts/meta-shopify-crosscheck.mjs).
+function renderTrackingTile(t) {
+  const r = t.latest?.result;
+  const [cls, label, detail] =
+    r === 'match'
+      ? ['status-pass', 'MATCH', `Meta and Shopify agreed for ${escapeHtml(t.latest.forDate)}`]
+      : r === 'mismatch'
+        ? ['status-fail', 'MISMATCH', `Shopify had orders on ${escapeHtml(t.latest.forDate)} but Meta saw no purchases`]
+        : r === 'error'
+          ? ['status-warn', 'CHECK FAILED', `Couldn't run the cross-check for ${escapeHtml(t.latest.forDate)}`]
+          : ['status-off', 'NOT CONNECTED', 'Cross-check not set up yet'];
+  const record = t.daysChecked
+    ? `<div class="stats">${t.matchStreakDays}-day match streak · ${t.daysMatched} of ${t.daysChecked} days checked matched</div>`
+    : '';
+  return `<span class="status ${cls}">${label}</span> &nbsp; ${detail}${record}`;
+}
+
 export function render(data) {
   const run = data.latestRun || { passed: 0, failed: 0, skipped: 0, checks: [] };
   const failures = run.checks.filter((c) => c.status === 'failed');
@@ -78,6 +95,8 @@ export function render(data) {
   .status { display:inline-block; padding:4px 10px; border-radius:6px; font-weight:600; font-size:13px; }
   .status-pass { background:#1e3a2a; color:#4ade80; }
   .status-fail { background:#3a1e1e; color:#f87171; }
+  .status-warn { background:#3a321e; color:#fbbf24; }
+  .status-off { background:#222; color:#999; }
   .stats { color:#999; font-size:13px; margin-top:10px; }
   section { margin-bottom:32px; }
   table { border-collapse: collapse; width:100%; max-width:600px; font-size:13px; }
@@ -102,6 +121,11 @@ export function render(data) {
       clean-run streak ${s.currentCleanStreak} (best ${s.longestCleanStreak}) ·
       ${pct(s.cleanRunRate30)} of the last 30 runs fully green
     </div>
+  </section>
+
+  <section>
+    <h2 style="font-size:15px">Tracking integrity (Meta pixel vs Shopify orders, daily)</h2>
+    ${renderTrackingTile(data.tracking)}
   </section>
 
   <section>
