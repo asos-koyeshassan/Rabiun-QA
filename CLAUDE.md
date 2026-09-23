@@ -35,4 +35,11 @@ This repo, its Actions logs and the GitHub Pages dashboard are all public.
 
 ## Workflow
 - Branch → PR → suite runs on the PR → merge on green.
-- Daily CSV history commits land straight on `main` via the bot.
+- `main` is protected by the "protect main" ruleset: changes land only via
+  PR, and the `qa` check must pass. Nothing (including the bot) can push
+  to it directly.
+- History CSVs live on the `qa-data` branch, not `main`. Each run restores
+  them into `data/` (git-ignored on `main`), appends today's results, and the
+  bot commits them back to `qa-data`. PR runs only test: they skip saving
+  history and publishing the dashboard.
+- Refer to PRs as number + short name + link, e.g. "#2 (privacy clean-up)".

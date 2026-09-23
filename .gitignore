@@ -3,3 +3,5 @@ test-results/
 playwright-report/
 dashboard/
 .DS_Store
+# History CSVs live on the qa-data branch; the workflow restores them here.
+data/
