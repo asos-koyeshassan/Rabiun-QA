@@ -89,7 +89,7 @@ jobs:
             git rm -rfq .
           fi
           mkdir -p data
-          cp "$GITHUB_WORKSPACE"/data/*.csv data/
+          cp -r "$GITHUB_WORKSPACE"/data/. data/
           git add data/
           git diff --staged --quiet || git commit -m "Daily QA run: $(date -u +%Y-%m-%d)"
           git push origin qa-data
