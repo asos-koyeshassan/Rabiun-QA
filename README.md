@@ -20,6 +20,7 @@ as my engineering partner.
 | **Page health** | Homepage, product pages, cart and contact page load with no errors, broken images or failed requests | A broken page is a lost sale |
 | **Pricing** | Each product shows the right price, in **GBP** | Catches pricing mistakes and currency bugs before customers do |
 | **Add to cart** | The button is visible and enabled, and actually adds the item | This is the one flow that has to work |
+| **Mobile layout** | Each product section (photos, title, price, size, add-to-cart) is compared with the previous run's screenshot | Catches a broken layout on the device most customers use |
 | **SEO basics** | Title, meta description and product structured data are present | Keeps products findable on Google |
 | **Meta pixel** | PageView, ViewContent and AddToCart events fire, checked at the network level | If tracking silently breaks, ad spend goes blind |
 | **Performance** | Lighthouse scores (performance, SEO, accessibility, best practices) for every page, every day | Trends over time, not a one-off snapshot |
@@ -31,6 +32,13 @@ as my engineering partner.
 **The homepage is the slowest page on the site.** On mobile it scores **38/100** for performance
 and takes about **7.9 seconds** to show its main content. The product pages score 56–63. That's a
 concrete, measurable thing to fix, and the daily trend will show whether the fix works.
+
+**A test that could never fail.** The mobile layout check was meant to compare each product page
+against the day before, but every run starts on a fresh machine with no previous screenshot, so it
+saved a new one and passed. It never compared anything. The screenshots now live on the `qa-data`
+branch, and the check compares only the product section: the "Worn by you" customer-photo carousel
+changes on every load, and customers' photos shouldn't be stored in a public repo anyway. It was
+verified to fail on a real change and to stay stable across repeat runs.
 
 **Getting from 0 to 33 passing tests.** The first run passed **0 of 33**. Two days later it passed
 **33 of 33**. The failures weren't bugs in the store. The tests weren't yet measuring it correctly.
@@ -74,10 +82,6 @@ lessons learned, so neither of us has to learn them twice.
 
 ## Known gaps (being worked on)
 
-- **The mobile layout check doesn't compare yet.** It saves a screenshot of each product page, but
-  every run starts on a fresh machine with no screenshot from the day before to compare against.
-  Next step: keep those screenshots on the `qa-data` branch so each run compares against the last
-  one.
 - **The Meta vs Shopify cross-check is built but switched off** until API keys are added.
 - **The mobile add-to-cart test is occasionally flaky** (it passes on retry). It needs a more
   reliable wait.

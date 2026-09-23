@@ -1,4 +1,6 @@
 // @ts-check
+const fs = require('node:fs');
+const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const { PRODUCT_PAGES, OTHER_PAGES, REDIRECT_CHECKS } = require('./pages');
 const { useUkMarket, addToCartButton, blockAnalyticsBeacons } = require('./helpers');
@@ -143,24 +145,35 @@ for (const p of PRODUCT_PAGES) {
     test.skip(testInfo.project.name !== 'mobile', 'Screenshot only needed once, on the mobile project');
     await page.goto(p.path, { waitUntil: 'load' });
     await page.waitForTimeout(1500);
-    const shot = await page.screenshot({ fullPage: true });
-    await testInfo.attach('mobile-screenshot', { body: shot, contentType: 'image/png' });
 
-    // Visual diff against a committed baseline. If there's no baseline yet
-    // (first run, or the workflow isn't committing snapshots back), record
-    // this run's screenshot as the baseline and pass — a missing baseline is
-    // not a site regression. NOTE: for the diff to mean anything day to day,
-    // the workflow must commit tests/**/*-snapshots/ back to the repo (see
-    // README); until then this only records, never compares.
-    const snapshotName = `${p.path.replace(/\//g, '_')}-mobile.png`;
-    const fs = require('node:fs');
+    // Rolling baseline: compare against the previous run's screenshot, then
+    // save today's as the new baseline. A regression fails the day it appears;
+    // an intended change (new photo, new theme) fails once, then becomes the
+    // baseline. Baselines live in data/snapshots/, which the workflow restores
+    // from and saves to the qa-data branch — without that, every run would
+    // start with no baseline and never compare.
+    const snapshotName = `${p.path.replace(/\//g, '_')}.png`;
     const baselinePath = testInfo.snapshotPath(snapshotName);
-    if (!fs.existsSync(baselinePath)) {
-      fs.mkdirSync(require('node:path').dirname(baselinePath), { recursive: true });
+    const hadBaseline = fs.existsSync(baselinePath);
+    // Screenshot only the product section (gallery, title, price, size,
+    // add-to-cart, info tabs): the layout that matters for a sale. The full
+    // page isn't stable — the "Worn by you" customer-photo carousel rotates
+    // and lower sections load late and change the page height. It also keeps
+    // customers' photos out of baselines, which are saved to a public branch.
+    const productSection = page.locator('.shopify-section').filter({ hasText: /add to cart/i }).first();
+    await expect(productSection, `${p.name}: product section not found`).toBeVisible();
+    try {
+      if (hadBaseline) {
+        await expect(productSection).toHaveScreenshot(snapshotName, { maxDiffPixelRatio: 0.01 });
+      } else {
+        testInfo.annotations.push({ type: 'baseline', description: `No baseline yet; recording ${snapshotName}` });
+      }
+    } finally {
+      // scale: 'css' matches toHaveScreenshot (device scale would be 3x on iPhone).
+      const shot = await productSection.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
+      await testInfo.attach('mobile-screenshot', { body: shot, contentType: 'image/png' });
+      fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
       fs.writeFileSync(baselinePath, shot);
-      testInfo.annotations.push({ type: 'baseline', description: `No baseline existed; recorded ${snapshotName}` });
-      return;
     }
-    await expect(page).toHaveScreenshot(snapshotName, { fullPage: true, maxDiffPixelRatio: 0.05 });
   });
 }
