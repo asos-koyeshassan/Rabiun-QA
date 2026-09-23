@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-            # History CSVs live on the qa-data branch. Pull them into data/ before
+      # History CSVs live on the qa-data branch. Pull them into data/ before
       # the Lighthouse and dashboard scripts add today's results.
       - name: Restore history from qa-data branch
         run: |
@@ -105,7 +105,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dashboard/
