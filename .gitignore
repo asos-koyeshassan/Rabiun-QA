@@ -1,7 +1,7 @@
 node_modules/
 test-results/
 playwright-report/
-dashboard/
+/dashboard/
 .DS_Store
 # History CSVs live on the qa-data branch; the workflow restores them here.
 data/
