@@ -53,6 +53,23 @@ This repo, its Actions logs and the GitHub Pages dashboard are all public.
   notes) in code comments or the README.
 - Secrets live in GitHub Actions secrets only — never in files.
 
+## Customer security comes first
+Customer security outranks every feature, metric and dashboard goal. If
+something can't be built without more access to customer data, don't
+build it; raise it with the owner instead.
+- Store tokens stay read-only with the fewest scopes that work (today:
+  `read_orders`, `read_reports`). Don't add scopes or protected customer
+  data access unless Shopify blocks the feature without it.
+- Scripts ask for totals or bare IDs (e.g. `fields=id`), never customer
+  fields (names, emails, addresses), even if the token could read them.
+- Secrets go only into the `env` of the steps that need them. The workflow
+  uses `pull_request`, never `pull_request_target`, so PRs from forks
+  never get secrets.
+- Any PR touching a script that reads secrets, or the workflow, gets
+  checked for new API fields and new log/output lines before merge.
+- Before a change touches store APIs, tokens or published data, tell the
+  owner up front what becomes public and what the token could reach.
+
 ## Workflow
 - Branch → PR → suite runs on the PR → merge on green.
 - `main` is protected by the "protect main" ruleset: changes land only via
