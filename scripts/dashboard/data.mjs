@@ -20,10 +20,11 @@ const RUN_HISTORY_CSV = path.join(ROOT, 'data', 'run-history.csv');
 const CHECK_HISTORY_CSV = path.join(ROOT, 'data', 'check-history.csv');
 const LIGHTHOUSE_CSV = path.join(ROOT, 'data', 'lighthouse-history.csv');
 const TRACKING_CSV = path.join(ROOT, 'data', 'tracking-history.csv');
-const SESSIONS_CSV = path.join(ROOT, 'data', 'sessions-trend.csv');
-// Hand-kept, public list of changes to the site or socials, so the sessions
-// chart can show what happened when. Lives on main, not qa-data.
-const CHANGES_CSV = path.join(ROOT, 'changes.csv');
+// Both live on main in insights/, updated by PR (not by CI). The sessions
+// trend is imported by hand (see scripts/shopify-sessions.mjs); changes.csv
+// is the public list of site/social changes shown as chart markers.
+const SESSIONS_CSV = path.join(ROOT, 'insights', 'sessions-trend.csv');
+const CHANGES_CSV = path.join(ROOT, 'insights', 'changes.csv');
 
 // New columns only ever go on the end (see appendCsv).
 const RUN_COLUMNS = ['date', 'passed', 'failed', 'skipped', 'time', 'flaky', 'duration_ms'];

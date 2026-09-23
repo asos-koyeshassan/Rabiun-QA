@@ -1,22 +1,32 @@
-// Daily Shopify sessions TREND for the public dashboard, split by where
-// visitors came from (direct / social / search). Sessions only: no sales,
-// orders or conversion rate.
+// Turns a private Shopify sessions export into the public, indexed trend in
+// insights/sessions-trend.csv. Sessions only: no sales, orders or conversion.
 //
-// Privacy: this repo, its logs and the dashboard are public, and raw session
-// counts stay private. Every value written is a 7-day rolling average
-// indexed to a fixed baseline (average daily sessions in BASELINE, = 100).
-// The baseline is fetched fresh each run and never logged or stored, and the
+// Why an import and not an API call from CI: Shopify's reports API needs
+// Level 2 protected customer data access (names, emails, addresses), and a
+// credential that can read those doesn't belong in a public repo's CI.
+// Instead the export is pulled from Shopify by hand (or by Claude with the
+// owner's connected Shopify) and fed to this script locally:
+//
+//   npm run sessions:import -- path/to/export.json
+//
+// Keep the export OUTSIDE the repo, as it holds raw counts. Its shape:
+//   {
+//     "baselineSessions": <total sessions in BASELINE>,
+//     "days": [{ "date": "YYYY-MM-DD", "direct": n, "social": n, "search": n, "other": n }],
+//     "botUsDirect": { "YYYY-MM-DD": n }   // US direct sessions on BOT_WINDOW days
+//   }
+// Shopify queries that produce it:
+//   FROM sessions SHOW sessions SINCE <BASELINE.from> UNTIL <BASELINE.to>
+//   FROM sessions SHOW sessions GROUP BY referrer_source TIMESERIES day SINCE <from> UNTIL -1d
+//   FROM sessions SHOW sessions WHERE referrer_source = 'direct' AND session_country = 'United States'
+//     TIMESERIES day SINCE <BOT_WINDOW.from> UNTIL <BOT_WINDOW.to>
+//
+// Privacy: only 7-day rolling averages indexed to the baseline (= 100) are
+// written. Raw counts and the baseline never leave the export, and the
 // rolling average means single-day counts can't be read back out.
-//
-// Needs SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_ACCESS_TOKEN (a custom app
-// with the read_reports scope). Skips cleanly without them.
-import fetch from 'node-fetch';
+import fs from 'node:fs';
 import path from 'node:path';
 import { readCsv, writeCsv } from './dashboard/csv.mjs';
-
-const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
-const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-const API_VERSION = '2026-07';
 
 // A normal month before any of the changes being measured, and before the
 // QA suite existed. Changing it rescales the whole history, so don't.
@@ -29,41 +39,22 @@ const BASELINE = { from: '2026-08-01', to: '2026-08-31' };
 const BOT_WINDOW = { from: '2026-09-17', to: '2026-09-23' };
 
 const SOURCES = ['direct', 'social', 'search'];
-const CSV_PATH = path.join(process.cwd(), 'data', 'sessions-trend.csv');
+const CSV_PATH = path.join(process.cwd(), 'insights', 'sessions-trend.csv');
 const COLUMNS = ['date', 'total', ...SOURCES, 'bot_adjusted'];
-
-async function shopifyql(query) {
-  const res = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/${API_VERSION}/graphql.json`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN },
-    body: JSON.stringify({
-      query: 'query ($q: String!) { shopifyqlQuery(query: $q) { tableData { rows } parseErrors } }',
-      variables: { q: query },
-    }),
-  });
-  if (!res.ok) throw new Error(`Shopify API returned ${res.status}`);
-  const body = await res.json();
-  if (body.errors?.length) throw new Error(`Shopify API error: ${body.errors[0].message}`);
-  const result = body.data.shopifyqlQuery;
-  if (result.parseErrors?.length) throw new Error(`ShopifyQL parse error: ${result.parseErrors[0]}`);
-  return result.tableData.rows;
-}
 
 const inBotWindow = (date) => date >= BOT_WINDOW.from && date <= BOT_WINDOW.to;
 
-// rows: [{ day, referrer_source, session_country, sessions }] -> Map(date -> { total, direct, social, search })
-export function dailyTotals(rows) {
-  const days = new Map();
-  for (const r of rows) {
-    const date = String(r.day).slice(0, 10);
-    const n = Number(r.sessions) || 0;
-    const d = days.get(date) || { total: 0, direct: 0, social: 0, search: 0 };
-    days.set(date, d);
-    if (inBotWindow(date) && r.referrer_source === 'direct' && r.session_country === 'United States') continue;
-    d.total += n;
-    if (SOURCES.includes(r.referrer_source)) d[r.referrer_source] += n;
+// Export days -> Map(date -> { total, direct, social, search }) with the QA
+// bot's US direct sessions taken out.
+export function dailyTotals(days, botUsDirect = {}) {
+  const out = new Map();
+  for (const d of days) {
+    const bot = inBotWindow(d.date) ? botUsDirect[d.date] || 0 : 0;
+    const direct = (d.direct || 0) - bot;
+    const total = direct + (d.social || 0) + (d.search || 0) + (d.other || 0);
+    out.set(d.date, { total, direct, social: d.social || 0, search: d.search || 0 });
   }
-  return days;
+  return out;
 }
 
 // 7-day rolling average, indexed so the baseline daily average = 100. Only
@@ -88,31 +79,21 @@ export function trendRows(days, baselinePerDay) {
   return out;
 }
 
-async function main() {
-  if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
-    console.log('Skipping sessions trend: SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN not set.');
-    return;
-  }
-  const baselineDays = (new Date(BASELINE.to) - new Date(BASELINE.from)) / 86_400_000 + 1;
-  const [[baseline], rows] = await Promise.all([
-    shopifyql(`FROM sessions SHOW sessions SINCE ${BASELINE.from} UNTIL ${BASELINE.to}`),
-    // Re-pull a few weeks every run so days that were still filling in get corrected.
-    shopifyql('FROM sessions SHOW sessions GROUP BY referrer_source, session_country TIMESERIES day SINCE -40d UNTIL -1d'),
-  ]);
-  const baselinePerDay = Number(baseline.sessions) / baselineDays;
-  if (!baselinePerDay) throw new Error('Baseline period has no sessions');
+function main() {
+  const exportPath = process.argv[2];
+  if (!exportPath) throw new Error('Usage: npm run sessions:import -- path/to/export.json');
+  if (path.resolve(exportPath).startsWith(process.cwd())) throw new Error('Keep the export outside the repo: it holds raw counts.');
 
-  const fresh = trendRows(dailyTotals(rows), baselinePerDay);
+  const exp = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+  const baselineDays = (new Date(BASELINE.to) - new Date(BASELINE.from)) / 86_400_000 + 1;
+  const baselinePerDay = exp.baselineSessions / baselineDays;
+  if (!baselinePerDay) throw new Error('Baseline has no sessions');
+
+  const fresh = trendRows(dailyTotals(exp.days, exp.botUsDirect), baselinePerDay);
   const byDate = new Map(readCsv(CSV_PATH).map((r) => [r.date, r]));
   for (const r of fresh) byDate.set(r.date, r);
   writeCsv(CSV_PATH, COLUMNS, [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)));
-  console.log(`Sessions trend updated (${fresh.length} days refreshed).`);
+  console.log(`Sessions trend: ${fresh.length} days written to insights/sessions-trend.csv.`);
 }
 
-// Only run when called directly, so the helpers above can be imported.
-if (process.argv[1]?.endsWith('shopify-sessions.mjs')) {
-  main().catch((err) => {
-    console.error('Sessions trend error:', err.message);
-    process.exitCode = 1;
-  });
-}
+if (process.argv[1]?.endsWith('shopify-sessions.mjs')) main();

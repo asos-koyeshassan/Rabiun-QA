@@ -16,10 +16,9 @@
 import fetch from 'node-fetch';
 import path from 'node:path';
 import { appendCsv } from './dashboard/csv.mjs';
+import { shopifyConfigured, shopifyGraphql } from './shopify-api.mjs';
 
 const WINDSOR_API_KEY = process.env.WINDSOR_API_KEY;
-const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN; // e.g. rabiun.myshopify.com
-const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 
 const HISTORY_CSV = path.join(process.cwd(), 'data', 'tracking-history.csv');
 
@@ -58,22 +57,18 @@ async function getMetaEventCounts(date) {
   return { purchases, addToCarts };
 }
 
+// Asks Shopify for a count only: no order records, no customer fields.
 async function getShopifyOrderCount(date) {
-  const start = `${date}T00:00:00Z`;
-  const end = `${date}T23:59:59Z`;
-  const url = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?status=any&created_at_min=${start}&created_at_max=${end}&fields=id`;
-  const res = await fetch(url, {
-    headers: { 'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN },
+  const data = await shopifyGraphql('query ($q: String!) { ordersCount(query: $q) { count } }', {
+    q: `created_at:>='${date}T00:00:00Z' created_at:<='${date}T23:59:59Z'`,
   });
-  if (!res.ok) throw new Error(`Shopify API returned ${res.status}`);
-  const data = await res.json();
-  return (data.orders || []).length;
+  return data.ordersCount.count;
 }
 
 async function main() {
-  if (!WINDSOR_API_KEY || !SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+  if (!WINDSOR_API_KEY || !shopifyConfigured()) {
     console.log(
-      'Skipping Meta/Shopify cross-check: WINDSOR_API_KEY, SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN not set. ' +
+      'Skipping Meta/Shopify cross-check: WINDSOR_API_KEY, SHOPIFY_STORE_DOMAIN, SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET not set. ' +
         'This check is optional — the rest of the suite runs fine without it.'
     );
     record(yesterday(), 'skipped');
